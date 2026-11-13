@@ -7,14 +7,15 @@ services:
       - .env
     environment:
       HTTP_PORT: ${HTTP_PORT:-8080}
-    # "expose" (not "ports") keeps this off the public internet when running
-    # under Coolify/Traefik, as long as you don't attach a public domain to
-    # this service in Coolify. Switch to "ports" below if you need direct
-    # host-port access from your LAN instead.
-    expose:
-      - "8080"
+    # Direct host-port mapping, same pattern used for filebrowser/transmission
+    # in devops/homelab. Do NOT attach a public domain/FQDN to this service
+    # in Coolify's "Domains" settings, or it becomes reachable from the
+    # internet through Traefik - only reach it via <server-lan-ip>:<HOST_PORT>.
+    # HOST_PORT is the port exposed on the host; change it in Coolify's env
+    # vars if 8080 is already taken by another service. The app always
+    # listens on HTTP_PORT (8080) inside the container.
     ports:
-      - "8080:8080"
+      - "${HOST_PORT:-8080}:${HTTP_PORT:-8080}"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
       interval: 30s

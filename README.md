@@ -19,14 +19,15 @@ A tiny dockerized app that:
 
 | Variable | Default | Description |
 |---|---|---|
-| `MQTT_HOST` | `localhost` | Broker hostname/IP |
+| `MQTT_HOST` | `192.168.1.160` | Broker hostname/IP (the mosquitto broker from `devops/homelab/mqtt.yaml`) |
 | `MQTT_PORT` | `1883` | Broker port (use `8883` + `MQTT_TLS=true` for TLS) |
-| `MQTT_USER` | – | MQTT username |
-| `MQTT_PASS` | – | MQTT password |
+| `MQTT_USER` | – | MQTT username (matches `MQTT_USER` in `mqtt.yaml`) |
+| `MQTT_PASSWORD` | – | MQTT password (matches `MQTT_PASSWORD` in `mqtt.yaml`) |
 | `MQTT_TOPIC` | `#` | Topic, or comma-separated list of topics |
 | `MQTT_QOS` | `0` | QoS level for subscriptions |
 | `MQTT_TLS` | `false` | Enable TLS |
-| `HTTP_PORT` | `8080` | Port the web UI listens on |
+| `HTTP_PORT` | `8080` | Port the web UI listens on inside the container |
+| `HOST_PORT` | `8080` | Port published on the host (change if `8080` is already taken on the Coolify server) |
 | `HISTORY_SIZE` | `50` | Messages kept per topic |
 | `REFRESH_SECONDS` | `3` | Page auto-refresh interval |
 | `ALLOWED_NETWORKS` | RFC1918 + loopback + link-local | Comma-separated CIDRs allowed to load the page |

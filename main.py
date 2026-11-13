@@ -20,10 +20,10 @@ log = logging.getLogger("mqtt-dashboard")
 # Configuration (all from environment variables)
 # --------------------------------------------------------------------------
 
-MQTT_HOST = os.environ.get("MQTT_HOST", "localhost")
+MQTT_HOST = os.environ.get("MQTT_HOST", "192.168.1.160")
 MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
 MQTT_USER = os.environ.get("MQTT_USER") or None
-MQTT_PASS = os.environ.get("MQTT_PASS") or None
+MQTT_PASS = os.environ.get("MQTT_PASSWORD") or None
 MQTT_TOPIC = os.environ.get("MQTT_TOPIC", "#")
 MQTT_QOS = int(os.environ.get("MQTT_QOS", "0"))
 MQTT_CLIENT_ID = os.environ.get("MQTT_CLIENT_ID", "mqtt-dashboard")
