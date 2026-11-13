@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MQTT Dashboard</title>
+<style>
+  :root {
+    color-scheme: dark light;
+    --bg: #0f1115;
+    --card: #171a21;
+    --border: #2a2e37;
+    --text: #e6e6e6;
+    --muted: #8b93a1;
+    --accent: #4cc9f0;
+    --ok: #4ade80;
+    --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+  }
+  h1 { margin-top: 0; font-size: 1.5rem; }
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    font-size: 0.85rem;
+    margin-bottom: 20px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); }
+  .dot.connected { background: var(--ok); }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .card h2 {
+    font-size: 1rem;
+    margin: 0 0 8px 0;
+    color: var(--accent);
+    word-break: break-all;
+  }
+  .timestamp { color: var(--muted); font-size: 0.8rem; margin-bottom: 10px; }
+  pre {
+    background: #0b0d11;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    max-height: 240px;
+    overflow: auto;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .empty { color: var(--muted); font-style: italic; }
+  footer { margin-top: 24px; color: var(--muted); font-size: 0.8rem; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+  <h1>MQTT Dashboard</h1>
+  <div class="status">
+    <span class="dot" id="status-dot"></span>
+    <span id="status-text">checking connection...</span>
+  </div>
+
+  <div class="grid" id="grid">
+    <div class="empty">Waiting for data...</div>
+  </div>
+
+  <footer>
+    Subscribed topics: {{ topics|join(', ') }} &middot;
+    Raw JSON: <a href="/api/data">/api/data</a> &middot;
+    Auto-refreshing every {{ refresh_seconds }}s
+  </footer>
+
+<script>
+const REFRESH_MS = {{ refresh_seconds }} * 1000;
+
+function escapeHtml(str) {
+  return str.replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+async function refresh() {
+  try {
+    const res = await fetch('/api/data', { cache: 'no-store' });
+    const data = await res.json();
+
+    const dot = document.getElementById('status-dot');
+    const text = document.getElementById('status-text');
+    if (data.status && data.status.connected) {
+      dot.classList.add('connected');
+      text.textContent = 'Connected to MQTT broker';
+    } else {
+      dot.classList.remove('connected');
+      text.textContent = 'Disconnected' + (data.status && data.status.last_error ? ' - ' + data.status.last_error : '');
+    }
+
+    const grid = document.getElementById('grid');
+    const topics = Object.keys(data.topics || {});
+    if (topics.length === 0) {
+      grid.innerHTML = '<div class="empty">Waiting for data...</div>';
+      return;
+    }
+
+    grid.innerHTML = topics.sort().map((topic) => {
+      const entry = data.topics[topic];
+      const latest = entry.latest || {};
+      const value = typeof latest.value === 'object'
+        ? JSON.stringify(latest.value, null, 2)
+        : String(latest.value);
+      return `
+        <div class="card">
+          <h2>${escapeHtml(topic)}</h2>
+          <div class="timestamp">Last update: ${escapeHtml(latest.timestamp || 'n/a')}</div>
+          <pre>${escapeHtml(value)}</pre>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Failed to refresh data', err);
+  }
+}
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>

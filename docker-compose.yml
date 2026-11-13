@@ -1,0 +1,22 @@
+services:
+  mqtt-dashboard:
+    build: .
+    container_name: mqtt-dashboard
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HTTP_PORT: ${HTTP_PORT:-8080}
+    # "expose" (not "ports") keeps this off the public internet when running
+    # under Coolify/Traefik, as long as you don't attach a public domain to
+    # this service in Coolify. Switch to "ports" below if you need direct
+    # host-port access from your LAN instead.
+    expose:
+      - "8080"
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
