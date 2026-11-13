@@ -184,7 +184,7 @@ def _is_allowed(ip_str):
         ip = ipaddress.ip_address(ip_str)
     except ValueError:
         return False
-    if ip.ipv4_mapped:
+    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
         ip = ip.ipv4_mapped
     return any(ip in net for net in ALLOWED_NETWORK_OBJS)
 
