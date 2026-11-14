@@ -4,8 +4,9 @@ import logging
 import os
 import threading
 import time
+import xml.etree.ElementTree as ET
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import paho.mqtt.client as mqtt
 from flask import Flask, Response, abort, jsonify, render_template, request
@@ -24,15 +25,27 @@ MQTT_HOST = os.environ.get("MQTT_HOST", "192.168.1.160")
 MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
 MQTT_USER = os.environ.get("MQTT_USER") or None
 MQTT_PASS = os.environ.get("MQTT_PASSWORD") or None
-MQTT_TOPIC = os.environ.get("MQTT_TOPIC", "#")
+MQTT_TOPIC = os.environ.get("MQTT_TOPIC", "weather")
 MQTT_QOS = int(os.environ.get("MQTT_QOS", "0"))
 MQTT_CLIENT_ID = os.environ.get("MQTT_CLIENT_ID", "mqtt-dashboard")
 MQTT_TLS = os.environ.get("MQTT_TLS", "false").lower() in ("1", "true", "yes")
 MQTT_KEEPALIVE = int(os.environ.get("MQTT_KEEPALIVE", "60"))
 
+# JSON field names inside the payload published on MQTT_TOPIC,
+# e.g. {"temp": 16.21, "hum": 40.75}
+TEMP_FIELD = os.environ.get("MQTT_TEMP_FIELD", "temp")
+HUMIDITY_FIELD = os.environ.get("MQTT_HUMIDITY_FIELD", "hum")
+
+# Temperature thresholds (Celsius) used to color the reading on the page.
+TEMP_COLD_BELOW = float(os.environ.get("TEMP_COLD_BELOW", "7"))
+TEMP_HOT_ABOVE = float(os.environ.get("TEMP_HOT_ABOVE", "27"))
+
 HTTP_PORT = int(os.environ.get("HTTP_PORT", "8080"))
-HISTORY_SIZE = int(os.environ.get("HISTORY_SIZE", "50"))
-REFRESH_SECONDS = int(os.environ.get("REFRESH_SECONDS", "3"))
+HISTORY_HOURS = float(os.environ.get("HISTORY_HOURS", "12"))
+REFRESH_SECONDS = int(os.environ.get("REFRESH_SECONDS", "300"))
+
+DATA_DIR = os.environ.get("DATA_DIR", "data")
+DATA_FILE = os.environ.get("DATA_FILE", os.path.join(DATA_DIR, "history.xml"))
 
 TRUST_PROXY = os.environ.get("TRUST_PROXY", "false").lower() in ("1", "true", "yes")
 
@@ -54,48 +67,161 @@ else:
 
 ALLOWED_NETWORK_OBJS = [ipaddress.ip_network(n, strict=False) for n in ALLOWED_NETWORKS]
 
-TOPICS = [t.strip() for t in MQTT_TOPIC.split(",") if t.strip()]
-
 # --------------------------------------------------------------------------
 # In-memory data store
 # --------------------------------------------------------------------------
 
 _lock = threading.Lock()
-_latest = {}  # topic -> {"value": ..., "raw": str, "timestamp": iso str}
-_history = {}  # topic -> deque of the above dicts
-_status = {"connected": False, "last_connect_attempt": None, "last_error": None}
+_latest = None  # {"temp": float, "hum": int, "timestamp": iso str, "raw": str}
+_history = deque()  # deque of {"timestamp": iso str, "temp": float, "hum": int}
+_status = {
+    "connected": False,
+    "last_connect_attempt": None,
+    "last_error": None,
+    "last_message_time": None,
+}
+
+
+def _now():
+    return datetime.now(timezone.utc)
 
 
 def _now_iso():
-    return datetime.now(timezone.utc).isoformat()
+    return _now().isoformat()
 
 
-def _store_message(topic, raw_payload):
+def _parse_iso(ts):
+    try:
+        return datetime.fromisoformat(ts)
+    except (TypeError, ValueError):
+        return None
+
+
+# --------------------------------------------------------------------------
+# XML persistence for history (timestamp + rounded temp/hum, last 12h)
+# --------------------------------------------------------------------------
+
+
+def _prune_history_locked():
+    cutoff = _now() - timedelta(hours=HISTORY_HOURS)
+    while _history:
+        ts = _parse_iso(_history[0]["timestamp"])
+        if ts is None or ts < cutoff:
+            _history.popleft()
+        else:
+            break
+
+
+def _load_history():
+    if not os.path.exists(DATA_FILE):
+        return
+    try:
+        tree = ET.parse(DATA_FILE)
+        root = tree.getroot()
+        loaded = deque()
+        for reading in root.findall("reading"):
+            ts = reading.get("timestamp")
+            temp = reading.get("temp")
+            hum = reading.get("hum")
+            if ts is None or temp is None or hum is None:
+                continue
+            loaded.append({"timestamp": ts, "temp": float(temp), "hum": int(float(hum))})
+        with _lock:
+            _history.clear()
+            _history.extend(loaded)
+            _prune_history_locked()
+        log.info("Loaded %d history entries from %s", len(loaded), DATA_FILE)
+    except (ET.ParseError, OSError, ValueError) as exc:
+        log.error("Failed to load history file %s: %s", DATA_FILE, exc)
+
+
+def _save_history_locked():
+    os.makedirs(os.path.dirname(DATA_FILE) or ".", exist_ok=True)
+    root = ET.Element("history")
+    for entry in _history:
+        ET.SubElement(
+            root,
+            "reading",
+            {
+                "timestamp": entry["timestamp"],
+                "temp": f"{entry['temp']:.1f}",
+                "hum": str(entry["hum"]),
+            },
+        )
+    tree = ET.ElementTree(root)
+    tmp_path = DATA_FILE + ".tmp"
+    tree.write(tmp_path, encoding="utf-8", xml_declaration=True)
+    os.replace(tmp_path, DATA_FILE)
+
+
+def _store_reading(raw_payload):
     try:
         value = json.loads(raw_payload)
-    except (ValueError, TypeError):
-        value = raw_payload
+    except (ValueError, TypeError) as exc:
+        log.warning("Ignoring non-JSON payload on %s: %s (%s)", MQTT_TOPIC, raw_payload, exc)
+        return
 
-    entry = {"value": value, "raw": raw_payload, "timestamp": _now_iso()}
+    if not isinstance(value, dict) or TEMP_FIELD not in value or HUMIDITY_FIELD not in value:
+        log.warning(
+            "Ignoring payload missing '%s'/'%s' fields on %s: %s",
+            TEMP_FIELD, HUMIDITY_FIELD, MQTT_TOPIC, raw_payload,
+        )
+        return
+
+    try:
+        temp = round(float(value[TEMP_FIELD]), 1)
+        hum = round(float(value[HUMIDITY_FIELD]))
+    except (TypeError, ValueError) as exc:
+        log.warning("Ignoring payload with non-numeric values on %s: %s (%s)", MQTT_TOPIC, raw_payload, exc)
+        return
+
+    ts = _now_iso()
+    entry = {"timestamp": ts, "temp": temp, "hum": hum}
 
     with _lock:
-        _latest[topic] = entry
-        if topic not in _history:
-            _history[topic] = deque(maxlen=HISTORY_SIZE)
-        _history[topic].append(entry)
+        _latest_entry = {"temp": temp, "hum": hum, "timestamp": ts, "raw": raw_payload}
+        globals()["_latest"] = _latest_entry
+        _status["last_message_time"] = ts
+        _history.append(entry)
+        _prune_history_locked()
+        try:
+            _save_history_locked()
+        except OSError as exc:
+            log.error("Failed to persist history to %s: %s", DATA_FILE, exc)
 
 
 def snapshot():
     with _lock:
         return {
             "status": dict(_status),
-            "topics": {
-                topic: {
-                    "latest": _latest.get(topic),
-                    "history": list(_history.get(topic, [])),
-                }
-                for topic in _latest.keys()
+            "latest": dict(_latest) if _latest else None,
+            "history": list(_history),
+            "config": {
+                "temp_cold_below": TEMP_COLD_BELOW,
+                "temp_hot_above": TEMP_HOT_ABOVE,
+                "refresh_seconds": REFRESH_SECONDS,
+                "history_hours": HISTORY_HOURS,
             },
+        }
+
+
+def service_snapshot():
+    with _lock:
+        return {
+            "status": dict(_status),
+            "latest": dict(_latest) if _latest else None,
+            "history_count": len(_history),
+            "oldest_history_timestamp": _history[0]["timestamp"] if _history else None,
+            "broker": {
+                "host": MQTT_HOST,
+                "port": MQTT_PORT,
+                "tls": MQTT_TLS,
+                "topic": MQTT_TOPIC,
+                "client_id": MQTT_CLIENT_ID,
+            },
+            "fields": {"temp": TEMP_FIELD, "hum": HUMIDITY_FIELD},
+            "data_file": os.path.abspath(DATA_FILE),
+            "history_hours": HISTORY_HOURS,
         }
 
 
@@ -111,9 +237,8 @@ def on_connect(client, userdata, flags, rc):
 
     if rc == 0:
         log.info("Connected to MQTT broker %s:%s", MQTT_HOST, MQTT_PORT)
-        for topic in TOPICS:
-            client.subscribe(topic, qos=MQTT_QOS)
-            log.info("Subscribed to topic: %s", topic)
+        client.subscribe(MQTT_TOPIC, qos=MQTT_QOS)
+        log.info("Subscribed to topic: %s", MQTT_TOPIC)
     else:
         log.error("Failed to connect to MQTT broker, rc=%s", rc)
 
@@ -130,7 +255,7 @@ def on_message(client, userdata, msg):
     except Exception:
         payload = repr(msg.payload)
     log.debug("Message on %s: %s", msg.topic, payload)
-    _store_message(msg.topic, payload)
+    _store_reading(payload)
 
 
 def mqtt_worker():
@@ -203,9 +328,16 @@ def restrict_to_local_network():
 def index():
     return render_template(
         "index.html",
-        topics=TOPICS,
         refresh_seconds=REFRESH_SECONDS,
+        temp_cold_below=TEMP_COLD_BELOW,
+        temp_hot_above=TEMP_HOT_ABOVE,
+        history_hours=HISTORY_HOURS,
     )
+
+
+@app.route("/service")
+def service():
+    return render_template("service.html", refresh_seconds=REFRESH_SECONDS)
 
 
 @app.route("/api/data")
@@ -213,10 +345,17 @@ def api_data():
     return jsonify(snapshot())
 
 
+@app.route("/api/service")
+def api_service():
+    return jsonify(service_snapshot())
+
+
 @app.route("/healthz")
 def healthz():
     return Response("ok", mimetype="text/plain")
 
+
+_load_history()
 
 if __name__ == "__main__":
     thread = threading.Thread(target=mqtt_worker, daemon=True)

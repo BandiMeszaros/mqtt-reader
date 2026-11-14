@@ -11,6 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY main.py .
 COPY templates ./templates
 
+RUN mkdir -p /app/data
+
 EXPOSE 8080
 
 # Single worker: the MQTT client + in-memory store live in one process.

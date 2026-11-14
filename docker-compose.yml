@@ -7,6 +7,10 @@ services:
       - .env
     environment:
       HTTP_PORT: ${HTTP_PORT:-8080}
+      DATA_DIR: /app/data
+    volumes:
+      # Persists the weather history XML file across restarts/deploys.
+      - mqtt-dashboard-data:/app/data
     # Direct host-port mapping, same pattern used for filebrowser/transmission
     # in devops/homelab. Do NOT attach a public domain/FQDN to this service
     # in Coolify's "Domains" settings, or it becomes reachable from the
@@ -21,3 +25,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  mqtt-dashboard-data:

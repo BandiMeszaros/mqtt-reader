@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Service status</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --card: #ffffff;
+    --border: #e4e4e7;
+    --text: #18181b;
+    --muted: #8a8a92;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 20px 48px;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  h1 { margin: 0; font-size: 1.25rem; font-weight: 600; }
+  a { color: var(--muted); }
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #d7263d; }
+  .dot.connected { background: #1a7f37; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  table + h2 { margin-top: 28px; }
+  th, td {
+    text-align: left;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+    vertical-align: top;
+  }
+  tr:last-child th, tr:last-child td { border-bottom: none; }
+  th { color: var(--muted); font-weight: 500; width: 45%; }
+  pre {
+    background: #0b0b0d;
+    color: #e4e4e7;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 0.85rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  footer { margin-top: 24px; color: var(--muted); font-size: 0.8rem; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Service status</h1>
+    <span class="status"><span class="dot" id="status-dot"></span><span id="status-text">checking&hellip;</span></span>
+  </header>
+
+  <table id="status-table">
+    <tbody></tbody>
+  </table>
+
+  <h2>Last raw payload</h2>
+  <pre id="raw-payload">n/a</pre>
+
+  <footer>
+    <a href="/">&larr; back to dashboard</a> &middot; Raw JSON: <a href="/api/service">/api/service</a>
+  </footer>
+</div>
+
+<script>
+const REFRESH_MS = {{ refresh_seconds }} * 1000;
+
+function fmtTime(iso) {
+  if (!iso) return 'n/a';
+  try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+}
+
+function row(label, value) {
+  return `<tr><th>${label}</th><td>${value}</td></tr>`;
+}
+
+async function refresh() {
+  try {
+    const res = await fetch('/api/service', { cache: 'no-store' });
+    const data = await res.json();
+
+    const dot = document.getElementById('status-dot');
+    const text = document.getElementById('status-text');
+    const connected = data.status && data.status.connected;
+    dot.classList.toggle('connected', !!connected);
+    text.textContent = connected ? 'connected' : 'disconnected';
+
+    const rows = [
+      row('MQTT connected', connected ? 'yes' : 'no'),
+      row('Broker', `${data.broker.host}:${data.broker.port}${data.broker.tls ? ' (TLS)' : ''}`),
+      row('Topic', data.broker.topic),
+      row('Client ID', data.broker.client_id),
+      row('Fields', `temp: <code>${data.fields.temp}</code>, hum: <code>${data.fields.hum}</code>`),
+      row('Last connect attempt', fmtTime(data.status.last_connect_attempt)),
+      row('Last error', data.status.last_error || 'none'),
+      row('Last message received', fmtTime(data.status.last_message_time)),
+      row('Last temperature', data.latest ? data.latest.temp.toFixed(1) + ' &deg;C' : 'n/a'),
+      row('Last humidity', data.latest ? Math.round(data.latest.hum) + ' %' : 'n/a'),
+      row('History entries stored', data.history_count),
+      row('History window', data.history_hours + ' h'),
+      row('Oldest stored entry', fmtTime(data.oldest_history_timestamp)),
+      row('History file', data.data_file),
+    ];
+    document.querySelector('#status-table tbody').innerHTML = rows.join('');
+    document.getElementById('raw-payload').textContent = data.latest ? data.latest.raw : 'n/a';
+  } catch (err) {
+    console.error('Failed to refresh service status', err);
+  }
+}
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>
