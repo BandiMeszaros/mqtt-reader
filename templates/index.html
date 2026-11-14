@@ -6,143 +6,123 @@
 <title>Weather</title>
 <style>
   :root {
-    --bg: #05070a;
-    --bg-grid: #0b1018;
-    --card: #eef1f5;
-    --panel: #10151d;
-    --border: #1d2733;
+    --bg: #fafafa;
+    --card: #ffffff;
+    --border: #e4e4e7;
     --text: #18181b;
     --muted: #8a8a92;
-    --cyan: #2dd4f0;
-    --red: #ff3b5c;
-    --blue: #2f8dff;
-    --green: #22c55e;
+    --red: #d7263d;
+    --blue: #2563eb;
+    --green: #1a7f37;
     --black: #18181b;
+  }
+  html[data-theme="dark"] {
+    --bg: #121212;
+    --card: #1b1b1e;
+    --border: #2d2d31;
+    --text: #e6e6e6;
+    --muted: #9a9aa2;
+    --black: #e6e6e6;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background:
-      radial-gradient(circle at 15% -10%, rgba(45, 212, 240, 0.12), transparent 45%),
-      radial-gradient(circle at 85% 0%, rgba(47, 141, 255, 0.10), transparent 40%),
-      linear-gradient(var(--bg-grid) 1px, transparent 1px) 0 0 / 100% 36px,
-      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px) 0 0 / 36px 100%,
-      var(--bg);
-    color: #e5e7eb;
+    background: var(--bg);
+    color: var(--text);
     padding: 32px 20px 48px;
-    min-height: 100vh;
+    transition: background 0.2s ease, color 0.2s ease;
   }
   .wrap { max-width: 780px; margin: 0 auto; }
   header {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
+    gap: 12px;
     margin-bottom: 28px;
   }
-  h1 {
-    margin: 0;
-    font-size: 1.1rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #f4f6f8;
-  }
-  h1::before {
-    content: '';
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    margin-right: 10px;
-    background: var(--cyan);
-    box-shadow: 0 0 8px var(--cyan);
-    border-radius: 1px;
-  }
+  h1 { margin: 0; font-size: 1.25rem; font-weight: 600; }
+  .header-right { display: flex; align-items: center; gap: 14px; }
   .status {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.75rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-size: 0.8rem;
     color: var(--muted);
   }
-  .dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--red);
-    box-shadow: 0 0 6px var(--red);
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #d7263d; }
+  .dot.connected { background: #1a7f37; }
+
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0;
   }
-  .dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .theme-toggle:hover { border-color: var(--muted); }
 
   .readings {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 16px;
-    margin-bottom: 20px;
+    margin-bottom: 28px;
   }
   .reading-card {
-    position: relative;
-    background: linear-gradient(180deg, rgba(255,255,255,0.98), var(--card));
+    background: var(--card);
     border: 1px solid var(--border);
     border-radius: 14px;
     padding: 24px;
     text-align: center;
-    box-shadow: 0 0 0 1px rgba(45, 212, 240, 0.06), 0 10px 30px -14px rgba(0,0,0,0.6);
-    overflow: hidden;
-  }
-  .reading-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--accent, var(--cyan)), transparent);
-    opacity: 0.8;
+    transition: background 0.2s ease, border-color 0.2s ease;
   }
   .reading-label {
-    font-size: 0.72rem;
-    letter-spacing: 0.14em;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: #71717a;
-    margin-bottom: 10px;
-    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 8px;
   }
   .reading-value {
-    font-family: "SF Mono", "JetBrains Mono", Consolas, monospace;
     font-size: 3rem;
     font-weight: 700;
     line-height: 1;
-    font-variant-numeric: tabular-nums;
   }
-  .reading-value .unit { font-size: 1.4rem; font-weight: 500; opacity: 0.6; }
+  .reading-value .unit { font-size: 1.5rem; font-weight: 500; opacity: 0.7; }
 
   .charts { display: flex; flex-direction: column; gap: 16px; }
   .chart-card {
-    background: var(--panel);
+    background: var(--card);
     border: 1px solid var(--border);
     border-radius: 14px;
     padding: 16px;
-    box-shadow: 0 10px 30px -18px rgba(0,0,0,0.8);
+    transition: background 0.2s ease, border-color 0.2s ease;
   }
   .chart-card h2 {
-    font-size: 0.72rem;
-    font-weight: 700;
+    font-size: 0.85rem;
+    font-weight: 600;
     margin: 0 0 10px 4px;
-    color: #9aa4b2;
+    color: var(--muted);
     text-transform: uppercase;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.04em;
   }
-  .chart-card h2 span.range { color: #5d6774; font-weight: 500; letter-spacing: 0.04em; }
-  canvas { width: 100%; height: 200px; display: block; }
+  canvas { width: 100%; height: 190px; display: block; }
 
   footer {
     margin-top: 28px;
     color: var(--muted);
-    font-size: 0.75rem;
-    letter-spacing: 0.03em;
+    font-size: 0.8rem;
     text-align: center;
   }
-  footer a { color: var(--cyan); text-decoration: none; }
-  footer a:hover { text-decoration: underline; }
+  footer a { color: var(--muted); }
   .empty { color: var(--muted); font-style: italic; text-align: center; padding: 20px 0; }
 </style>
 </head>
@@ -150,7 +130,10 @@
 <div class="wrap">
   <header>
     <h1>Weather</h1>
-    <span class="status"><span class="dot" id="status-dot"></span><span id="status-text">checking&hellip;</span></span>
+    <div class="header-right">
+      <span class="status"><span class="dot" id="status-dot"></span><span id="status-text">checking&hellip;</span></span>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle dark mode">&#9789;</button>
+    </div>
   </header>
 
   <div class="readings">
@@ -166,11 +149,11 @@
 
   <div class="charts">
     <div class="chart-card">
-      <h2>Temperature <span class="range" id="temp-range-text"></span></h2>
+      <h2>Temperature <span id="temp-range-text"></span></h2>
       <canvas id="temp-chart"></canvas>
     </div>
     <div class="chart-card">
-      <h2>Humidity <span class="range" id="hum-range-text"></span></h2>
+      <h2>Humidity <span id="hum-range-text"></span></h2>
       <canvas id="hum-chart"></canvas>
     </div>
   </div>
@@ -186,7 +169,30 @@
 const REFRESH_MS = {{ refresh_seconds }} * 1000;
 const COLD_BELOW = {{ temp_cold_below }};
 const HOT_ABOVE = {{ temp_hot_above }};
-const COLORS = { red: '#ff3b5c', blue: '#2f8dff', green: '#22c55e', black: '#18181b' };
+const COLORS = { red: '#d7263d', blue: '#2563eb', green: '#1a7f37' };
+
+// --- theme toggle ---
+const THEME_KEY = 'weather-theme';
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('theme-toggle').textContent = theme === 'dark' ? '\u2600' : '\u263D';
+}
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  const theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  applyTheme(theme);
+}
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem(THEME_KEY, next);
+  applyTheme(next);
+});
+initTheme();
+
+function textColor() {
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? '#e6e6e6' : '#18181b';
+}
 
 function tempColor(t) {
   if (t > HOT_ABOVE) return COLORS.red;
@@ -222,30 +228,30 @@ function fmtTick(ms, spanMs) {
 function rangeLabel(spanMs) {
   if (spanMs <= 0) return '';
   const mins = spanMs / 60000;
-  if (mins < 60) return `· last ${Math.max(1, Math.round(mins))}m`;
+  if (mins < 60) return `\u00b7 last ${Math.max(1, Math.round(mins))}m`;
   const hours = mins / 60;
-  if (hours < 48) return `· last ${hours.toFixed(hours < 10 ? 1 : 0)}h`;
-  return `· last ${(hours / 24).toFixed(1)}d`;
+  if (hours < 48) return `\u00b7 last ${hours.toFixed(hours < 10 ? 1 : 0)}h`;
+  return `\u00b7 last ${(hours / 24).toFixed(1)}d`;
 }
 
 function drawChart(canvas, points, color, opts) {
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   const w = rect.width || canvas.clientWidth || 300;
-  const h = 200;
+  const h = 190;
   canvas.width = w * dpr;
   canvas.height = h * dpr;
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
 
-  // background coordinate system
-  const pad = { l: 38, r: 12, t: 12, b: 24 };
-  ctx.fillStyle = '#05070a';
+  // background coordinate system (always black, regardless of page theme)
+  ctx.fillStyle = '#0b0d11';
+  const pad = { l: 38, r: 10, t: 10, b: 22 };
   ctx.fillRect(0, 0, w, h);
 
   if (!points.length) {
-    ctx.fillStyle = '#4b5563';
+    ctx.fillStyle = '#6b6b70';
     ctx.font = '12px sans-serif';
     ctx.fillText('No data yet', pad.l, h / 2);
     return;
@@ -255,7 +261,7 @@ function drawChart(canvas, points, color, opts) {
   let min = Math.min(...values);
   let max = Math.max(...values);
   if (min === max) { min -= 1; max += 1; }
-  const margin = (max - min) * 0.12;
+  const margin = (max - min) * 0.1;
   min -= margin;
   max += margin;
 
@@ -269,10 +275,10 @@ function drawChart(canvas, points, color, opts) {
   const y = (v) => pad.t + plotH - ((v - min) / (max - min)) * plotH;
 
   // horizontal grid lines + y labels
-  ctx.strokeStyle = 'rgba(148, 163, 184, 0.12)';
+  ctx.strokeStyle = '#26262a';
   ctx.lineWidth = 1;
-  ctx.fillStyle = '#6b7280';
-  ctx.font = '10px monospace';
+  ctx.fillStyle = '#8a8a90';
+  ctx.font = '10px sans-serif';
   const ySteps = 4;
   for (let i = 0; i <= ySteps; i++) {
     const v = min + ((max - min) * i) / ySteps;
@@ -290,20 +296,17 @@ function drawChart(canvas, points, color, opts) {
   ctx.textAlign = 'center';
   for (let t = firstTick; t <= tMax; t += step) {
     const xx = x(t);
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.08)';
+    ctx.strokeStyle = '#1c1c20';
     ctx.beginPath();
     ctx.moveTo(xx, pad.t);
     ctx.lineTo(xx, pad.t + plotH);
     ctx.stroke();
-    ctx.fillStyle = '#6b7280';
+    ctx.fillStyle = '#8a8a90';
     ctx.fillText(fmtTick(t, tSpan), xx, h - 6);
   }
   ctx.textAlign = 'left';
 
-  // glow + line
-  ctx.save();
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 6;
+  // line
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -313,14 +316,6 @@ function drawChart(canvas, points, color, opts) {
     if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
   });
   ctx.stroke();
-  ctx.restore();
-
-  // current value dot
-  const last = points[points.length - 1];
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(x(last.t), y(last.v), 3, 0, Math.PI * 2);
-  ctx.fill();
 }
 
 function fmtTime(iso) {
@@ -354,7 +349,7 @@ async function refresh() {
       tempEl.innerHTML = latest.temp.toFixed(1) + '<span class="unit">&deg;C</span>';
       tempEl.style.color = tempColor(latest.temp);
       humEl.innerHTML = Math.round(latest.hum) + '<span class="unit">%</span>';
-      humEl.style.color = COLORS.black;
+      humEl.style.color = textColor();
       document.getElementById('last-update').textContent = fmtTime(latest.timestamp);
     } else {
       tempEl.textContent = '–';
